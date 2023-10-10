@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const dvui = @import("dvui");
 const janet = @import("janet");
 const SDLBackend = @import("SDLBackend");
@@ -13,8 +14,9 @@ pub const c = @cImport({
 var window: *c.SDL_Window = undefined;
 var renderer: *c.SDL_Renderer = undefined;
 
-var env: *janet.Environment = undefined;
-var ex: janet.Janet = undefined;
+pub var env: *janet.Environment = undefined;
+var janetWindows: std.ArrayList(JanetValueWindow) = undefined;
+
 /// This example shows how to use dvui for floating windows on top of an existing application
 /// - dvui renders only floating windows
 /// - framerate is managed by application, not dvui
@@ -24,7 +26,14 @@ pub fn main() !void {
     var env_ = janet.Table.initDynamic(0);
     env_.proto = core_env.toTable();
     env = env_.toEnvironment();
-    ex = try env.doString("[1 2 3]", "(embed)");
+
+    janetWindows = @TypeOf(janetWindows).init(gpa);
+    defer {
+        for (janetWindows.items) |x| x.deinit();
+        janetWindows.deinit();
+    }
+    const ex = try env.doString("[1 2 3]", "(embed)");
+    try janetWindows.append(JanetValueWindow.init(ex));
 
     // app_init is a stand-in for what your application is already doing to set things up
     try app_init();
@@ -37,25 +46,19 @@ pub fn main() !void {
     var win = try dvui.Window.init(@src(), 0, gpa, backend.backend());
     defer win.deinit();
 
-    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    const arena = arena_allocator.allocator();
-
     main_loop: while (true) {
-        defer _ = arena_allocator.reset(.free_all);
-
-        // marks the beginning of a frame for dvui, can call dvui functions after this
-        try win.begin(arena, std.time.nanoTimestamp());
+        try win.begin(.{});
 
         // send events to dvui if they belong to floating windows
         var event: SDLBackend.c.SDL_Event = undefined;
         while (SDLBackend.c.SDL_PollEvent(&event) != 0) {
             // some global quitting shortcuts
             switch (event.type) {
-                c.SDL_KEYDOWN => {
-                    if (((event.key.keysym.mod & c.KMOD_CTRL) > 0) and event.key.keysym.sym == c.SDLK_q) {
-                        break :main_loop;
-                    }
-                },
+                // c.SDL_KEYDOWN => {
+                //     if (((event.key.keysym.mod & c.KMOD_CTRL) > 0) and event.key.keysym.sym == c.SDLK_q) {
+                //         break :main_loop;
+                //     }
+                // },
                 c.SDL_QUIT => {
                     break :main_loop;
                 },
@@ -73,7 +76,7 @@ pub fn main() !void {
         // dvui calls interleaved
         backend.clear();
 
-        try dvui_stuff();
+        try ui_logic();
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
@@ -93,45 +96,72 @@ pub fn main() !void {
     }
 }
 
-fn dvui_stuff() !void {
+pub const JanetValueWindow = struct {
+    value: janet.Janet,
+
+    pub fn init(value: janet.Janet) @This() {
+        janet.gcRoot(value);
+        return .{
+            .value = value,
+        };
+    }
+    pub fn deinit(this: @This()) void {
+        _ = janet.gcUnroot(this.value);
+    }
+};
+
+fn ui_logic() !void {
     const a = dvui.currentWindow().arena;
+    _ = a;
 
-    var float = try dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{ .w = 400, .h = 400 } });
-    defer float.deinit();
+    for (janetWindows.items) |win| {
+        var float = try dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{ .w = 400, .h = 400 } });
+        defer float.deinit();
+        env.def("_", win.value, null);
+        const result = try env.doString(
+            \\(string/format "%q" _)
+        , "(embed)");
+        const s = try result.bytesView();
+        try dvui.windowHeader(s.slice(), "", null);
 
-    try dvui.windowHeader("Floating Window", "", null);
+        // try tl2.addText(try std.fmt.allocPrint(a, "- {}\n", .{try elm.unwrap(f64)}), .{});
 
-    var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_style = .window });
-    defer scroll.deinit();
-
-    var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
-    const lorem = "This example shows how to use dvui for floating windows on top of an existing application.";
-    try tl.addText(lorem, .{});
-    tl.deinit();
-
-    var tl2 = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-    try tl2.addText("The dvui is painting only floating windows and dialogs.", .{});
-    try tl2.addText("\n\n", .{});
-    try tl2.addText("Framerate is managed by the application (in this demo capped at vsync).", .{});
-    try tl2.addText("\n\n", .{});
-    try tl2.addText("Cursor is only being set by dvui for floating windows.", .{});
-
-    for ((try ex.indexedView()).slice()) |elm| {
-        try tl2.addText(try std.fmt.allocPrint(a, "- {}\n", .{try elm.unwrap(f64)}), .{});
     }
 
-    tl2.deinit();
+    {
+        var float = try dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{ .w = 400, .h = 400 } });
+        defer float.deinit();
 
-    if (dvui.Examples.show_demo_window) {
-        if (try dvui.button(@src(), "Hide Demo Window", .{})) {
-            dvui.Examples.show_demo_window = false;
+        try dvui.windowHeader("Floating Window", "", null);
+
+        var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_style = .window });
+        defer scroll.deinit();
+        {
+            var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
+            defer tl.deinit();
+            const lorem = "This example shows how to use dvui for floating windows on top of an existing application.";
+            try tl.addText(lorem, .{});
         }
-    } else {
-        if (try dvui.button(@src(), "Show Demo Window", .{})) {
-            dvui.Examples.show_demo_window = true;
+        {
+            var tl2 = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
+            defer tl2.deinit();
+            try tl2.addText("The dvui is painting only floating windows and dialogs.", .{});
+            try tl2.addText("\n\n", .{});
+            try tl2.addText("Framerate is managed by the application (in this demo capped at vsync).", .{});
+            try tl2.addText("\n\n", .{});
+            try tl2.addText("Cursor is only being set by dvui for floating windows.", .{});
+        }
+
+        if (dvui.Examples.show_demo_window) {
+            if (try dvui.button(@src(), "Hide Demo Window", .{})) {
+                dvui.Examples.show_demo_window = false;
+            }
+        } else {
+            if (try dvui.button(@src(), "Show Demo Window", .{})) {
+                dvui.Examples.show_demo_window = true;
+            }
         }
     }
-
     // look at demo() for examples of dvui widgets, shows in a floating window
     try dvui.Examples.demo();
 }
