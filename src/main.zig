@@ -121,7 +121,9 @@ pub const JanetValueWindow = struct {
             \\(string/format "%q" _)
         , "(embed)");
         const s = try result.bytesView();
-        try dvui.windowHeader(s.slice(), "", null);
+        try dvui.windowHeader("_0000v_todo", "", null);
+
+        try dvui.labelNoFmt(@src(), s.slice(), .{ .expand = .both });
 
         const entry = try dvui.textEntry(@src(), .{ .text = &this.text_buf }, .{ .expand = .horizontal });
         defer entry.deinit();
