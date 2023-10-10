@@ -98,6 +98,7 @@ pub fn main() !void {
 
 pub const JanetValueWindow = struct {
     value: janet.Janet,
+    text_buf: [1024]u8 = .{0} ** 1024,
 
     pub fn init(value: janet.Janet) @This() {
         janet.gcRoot(value);
@@ -108,62 +109,81 @@ pub const JanetValueWindow = struct {
     pub fn deinit(this: @This()) void {
         _ = janet.gcUnroot(this.value);
     }
-};
 
-fn ui_logic() !void {
-    const a = dvui.currentWindow().arena;
-    _ = a;
-
-    for (janetWindows.items) |win| {
-        var float = try dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{ .w = 400, .h = 400 } });
+    pub fn draw(this: *@This(), _id: usize) !void {
+        var src = @src();
+        src.line += @intCast(_id);
+        src.line += 10000;
+        var float = try dvui.floatingWindow(src, .{}, .{ .min_size_content = .{ .w = 150, .h = 100 }, .expand = .both });
         defer float.deinit();
-        env.def("_", win.value, null);
+        env.def("_", this.value, null);
         const result = try env.doString(
             \\(string/format "%q" _)
         , "(embed)");
         const s = try result.bytesView();
         try dvui.windowHeader(s.slice(), "", null);
 
-        // try tl2.addText(try std.fmt.allocPrint(a, "- {}\n", .{try elm.unwrap(f64)}), .{});
+        const entry = try dvui.textEntry(@src(), .{ .text = &this.text_buf }, .{ .expand = .horizontal });
+        defer entry.deinit();
 
-    }
-
-    {
-        var float = try dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{ .w = 400, .h = 400 } });
-        defer float.deinit();
-
-        try dvui.windowHeader("Floating Window", "", null);
-
-        var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_style = .window });
-        defer scroll.deinit();
-        {
-            var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
-            defer tl.deinit();
-            const lorem = "This example shows how to use dvui for floating windows on top of an existing application.";
-            try tl.addText(lorem, .{});
-        }
-        {
-            var tl2 = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-            defer tl2.deinit();
-            try tl2.addText("The dvui is painting only floating windows and dialogs.", .{});
-            try tl2.addText("\n\n", .{});
-            try tl2.addText("Framerate is managed by the application (in this demo capped at vsync).", .{});
-            try tl2.addText("\n\n", .{});
-            try tl2.addText("Cursor is only being set by dvui for floating windows.", .{});
-        }
-
-        if (dvui.Examples.show_demo_window) {
-            if (try dvui.button(@src(), "Hide Demo Window", .{})) {
-                dvui.Examples.show_demo_window = false;
-            }
-        } else {
-            if (try dvui.button(@src(), "Show Demo Window", .{})) {
-                dvui.Examples.show_demo_window = true;
+        const text = this.text_buf[0..entry.len];
+        if (text.len > 0 and text[text.len - 1] == '\n') {
+            text[text.len - 1] = 0;
+            if (env.doString(text, "(embed repl)")) |res| {
+                try janetWindows.append(JanetValueWindow.init(res));
+                @memset(&this.text_buf, 0);
+            } else |err| {
+                std.log.err("when running janet code: {}", .{err});
             }
         }
     }
-    // look at demo() for examples of dvui widgets, shows in a floating window
-    try dvui.Examples.demo();
+};
+
+var text_buf: [100]u8 = .{0} ** 100;
+fn ui_logic() !void {
+    const a = dvui.currentWindow().arena;
+    _ = a;
+
+    for (janetWindows.items, 0..) |*win, i| {
+        try win.draw(i);
+    }
+
+    // {
+    //     var float = try dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{ .w = 400, .h = 400 } });
+    //     defer float.deinit();
+
+    //     try dvui.windowHeader("Floating Window", "", null);
+
+    //     var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_style = .window });
+    //     defer scroll.deinit();
+    //     {
+    //         var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
+    //         defer tl.deinit();
+    //         const lorem = "This example shows how to use dvui for floating windows on top of an existing application.";
+    //         try tl.addText(lorem, .{});
+    //     }
+    //     {
+    //         var tl2 = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
+    //         defer tl2.deinit();
+    //         try tl2.addText("The dvui is painting only floating windows and dialogs.", .{});
+    //         try tl2.addText("\n\n", .{});
+    //         try tl2.addText("Framerate is managed by the application (in this demo capped at vsync).", .{});
+    //         try tl2.addText("\n\n", .{});
+    //         try tl2.addText("Cursor is only being set by dvui for floating windows.", .{});
+    //     }
+
+    //     if (dvui.Examples.show_demo_window) {
+    //         if (try dvui.button(@src(), "Hide Demo Window", .{})) {
+    //             dvui.Examples.show_demo_window = false;
+    //         }
+    //     } else {
+    //         if (try dvui.button(@src(), "Show Demo Window", .{})) {
+    //             dvui.Examples.show_demo_window = true;
+    //         }
+    //     }
+    // }
+    // // look at demo() for examples of dvui widgets, shows in a floating window
+    // try dvui.Examples.demo();
 }
 
 fn app_init() !void {
