@@ -138,7 +138,7 @@ pub const ObjectManager = struct {
 
     pub fn drawValue(this: *@This(), key: []const u8, value: janet.Janet) !void {
         var open = true;
-        var float = try dvui.floatingWindow(@src(), .{ .open_flag = &open }, .{ .min_size_content = .{ .w = 150, .h = 100 }, .expand = .both, .id_extra = @intFromPtr(key.ptr) });
+        var float = try dvui.floatingWindow(@src(), .{ .open_flag = &open }, .{ .min_size_content = .{}, .id_extra = @intFromPtr(key.ptr) });
         defer float.deinit();
         this.env.def("_", value, null);
         const result = try this.env.doString(
@@ -152,25 +152,30 @@ pub const ObjectManager = struct {
             return;
         }
 
-        try dvui.labelNoFmt(@src(), s.slice(), .{ .expand = .both });
+        const layout = try dvui.textLayout(@src(), .{}, .{ .expand = .vertical, .background = false, .min_size_content = .{ .w = 150 } });
+        try layout.addText(s.slice(), .{});
+        try layout.addTextDone(.{});
+        layout.deinit();
 
         var doit_buffer = dvui.dataGet(null, float.wd.id, key, [1024]u8) orelse .{0} ** 1024;
         defer dvui.dataSet(null, float.wd.id, key, doit_buffer);
 
-        const entry = try dvui.textEntry(@src(), .{ .text = &doit_buffer }, .{ .expand = .horizontal });
-        defer entry.deinit();
+        {
+            const entry = try dvui.textEntry(@src(), .{ .text = &doit_buffer }, .{ .expand = .horizontal });
+            defer entry.deinit();
 
-        const text = doit_buffer[0..entry.len];
-        if (text.len > 0 and text[text.len - 1] == '\n') {
-            text[text.len - 1] = 0;
-            if (this.env.doString(text, "(embed repl)")) |res| {
-                const sym = try (try this.env.doString("(gensym)", "(embed)")).unwrap(janet.Symbol);
-                const slice = try dvui.currentWindow().arena.dupeZ(u8, sym.slice);
-                this.env.def(slice, res, null);
-                // try janetWindows.append(JanetValueWindow.init(res));
-                @memset(&doit_buffer, 0);
-            } else |err| {
-                std.log.err("when running janet code: {}", .{err});
+            const text = doit_buffer[0..entry.len];
+            if (text.len > 0 and text[text.len - 1] == '\n') {
+                text[text.len - 1] = 0;
+                if (this.env.doString(text, "(embed repl)")) |res| {
+                    const sym = try (try this.env.doString("(gensym)", "(embed)")).unwrap(janet.Symbol);
+                    const slice = try dvui.currentWindow().arena.dupeZ(u8, sym.slice);
+                    this.env.def(slice, res, null);
+                    // try janetWindows.append(JanetValueWindow.init(res));
+                    @memset(&doit_buffer, 0);
+                } else |err| {
+                    std.log.err("when running janet code: {}", .{err});
+                }
             }
         }
     }
