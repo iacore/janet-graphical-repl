@@ -111,10 +111,7 @@ pub const JanetValueWindow = struct {
     }
 
     pub fn draw(this: *@This(), _id: usize) !void {
-        var src = @src();
-        src.line += @intCast(_id);
-        src.line += 10000;
-        var float = try dvui.floatingWindow(src, .{}, .{ .min_size_content = .{ .w = 150, .h = 100 }, .expand = .both });
+        var float = try dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{ .w = 150, .h = 100 }, .expand = .both, .id_extra = _id });
         defer float.deinit();
         env.def("_", this.value, null);
         const result = try env.doString(
