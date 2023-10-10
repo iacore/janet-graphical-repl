@@ -14,26 +14,33 @@ pub const c = @cImport({
 var window: *c.SDL_Window = undefined;
 var renderer: *c.SDL_Renderer = undefined;
 
-pub var env: *janet.Environment = undefined;
-var janetWindows: std.ArrayList(JanetValueWindow) = undefined;
+fn app_init() !void {
+    if (c.SDL_Init(c.SDL_INIT_VIDEO) < 0) {
+        std.debug.print("Couldn't initialize SDL: {s}\n", .{c.SDL_GetError()});
+        return error.BackendError;
+    }
+
+    window = c.SDL_CreateWindow("DVUI Ontop Example", c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @as(c_int, @intCast(640)), @as(c_int, @intCast(480)), c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE) orelse {
+        std.debug.print("Failed to open window: {s}\n", .{c.SDL_GetError()});
+        return error.BackendError;
+    };
+
+    _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+
+    renderer = c.SDL_CreateRenderer(window, -1, c.SDL_RENDERER_PRESENTVSYNC) orelse {
+        std.debug.print("Failed to create renderer: {s}\n", .{c.SDL_GetError()});
+        return error.BackendError;
+    };
+
+    _ = c.SDL_SetRenderDrawBlendMode(renderer, c.SDL_BLENDMODE_BLEND);
+}
 
 /// This example shows how to use dvui for floating windows on top of an existing application
 /// - dvui renders only floating windows
 /// - framerate is managed by application, not dvui
 pub fn main() !void {
-    try janet.init();
-    const core_env = janet.Environment.coreEnv(null);
-    var env_ = janet.Table.initDynamic(0);
-    env_.proto = core_env.toTable();
-    env = env_.toEnvironment();
-
-    janetWindows = @TypeOf(janetWindows).init(gpa);
-    defer {
-        for (janetWindows.items) |x| x.deinit();
-        janetWindows.deinit();
-    }
-    const ex = try env.doString("[1 2 3]", "(embed)");
-    try janetWindows.append(JanetValueWindow.init(ex));
+    var manager = try ObjectManager.init();
+    _ = try manager.env.doString("(def _root [1 2 3])", "(embed)");
 
     // app_init is a stand-in for what your application is already doing to set things up
     try app_init();
@@ -76,7 +83,7 @@ pub fn main() !void {
         // dvui calls interleaved
         backend.clear();
 
-        try ui_logic();
+        try manager.draw();
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
@@ -96,112 +103,77 @@ pub fn main() !void {
     }
 }
 
-pub const JanetValueWindow = struct {
-    value: janet.Janet,
-    text_buf: [1024]u8 = .{0} ** 1024,
+pub const ObjectManager = struct {
+    env: *janet.Environment,
 
-    pub fn init(value: janet.Janet) @This() {
-        janet.gcRoot(value);
+    pub fn init() !@This() {
+        try janet.init();
+        const core_env = janet.Environment.coreEnv(null);
+        var env_ = janet.Table.initDynamic(0);
+        env_.proto = core_env.toTable();
+        const env = env_.toEnvironment();
         return .{
-            .value = value,
+            .env = env,
         };
     }
-    pub fn deinit(this: @This()) void {
-        _ = janet.gcUnroot(this.value);
+
+    pub fn draw(this: *@This()) !void {
+        const a = dvui.currentWindow().arena;
+        _ = a;
+
+        const lookup = this.env.envLookup().toTable().wrap();
+        const kvs = try lookup.dictionaryView();
+        for (kvs.slice()) |kv| {
+            if (kv.key.unwrap(janet.Symbol)) |key_obj| {
+                const key = key_obj.slice;
+                if (key.len > 1 and key[0] == '_') {
+                    try this.drawValue(key, kv.value);
+                }
+                // _ = try this.env.doString("(put (curenv) '_ nil)", "(embed)");
+            } else |_| {}
+        }
+
+        // try dvui.Examples.demo();
     }
 
-    pub fn draw(this: *@This(), _id: usize) !void {
-        var float = try dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{ .w = 150, .h = 100 }, .expand = .both, .id_extra = _id });
+    pub fn drawValue(this: *@This(), key: [:0]const u8, value: janet.Janet) !void {
+        var open = true;
+        var float = try dvui.floatingWindow(@src(), .{ .open_flag = &open }, .{ .min_size_content = .{ .w = 150, .h = 100 }, .expand = .both, .id_extra = @intFromPtr(key.ptr) });
         defer float.deinit();
-        env.def("_", this.value, null);
-        const result = try env.doString(
+        this.env.def("_", value, null);
+        const result = try this.env.doString(
             \\(string/format "%q" _)
         , "(embed)");
         const s = try result.bytesView();
-        try dvui.windowHeader("_0000v_todo", "", null);
+        try dvui.windowHeader(key, "", &open);
+        if (!open) {
+            this.env.def("_", janet.symbol(key), null);
+            _ = try this.env.doString("(put (curenv) _ nil)", "(embed)");
+            return;
+        }
 
         try dvui.labelNoFmt(@src(), s.slice(), .{ .expand = .both });
 
-        const entry = try dvui.textEntry(@src(), .{ .text = &this.text_buf }, .{ .expand = .horizontal });
+        var doit_buffer = dvui.dataGet(null, float.wd.id, key, [1024]u8) orelse .{0} ** 1024;
+        defer dvui.dataSet(null, float.wd.id, key, doit_buffer);
+
+        const entry = try dvui.textEntry(@src(), .{ .text = &doit_buffer }, .{ .expand = .horizontal });
         defer entry.deinit();
 
-        const text = this.text_buf[0..entry.len];
+        const text = doit_buffer[0..entry.len];
         if (text.len > 0 and text[text.len - 1] == '\n') {
             text[text.len - 1] = 0;
-            if (env.doString(text, "(embed repl)")) |res| {
-                try janetWindows.append(JanetValueWindow.init(res));
-                @memset(&this.text_buf, 0);
+            if (this.env.doString(text, "(embed repl)")) |res| {
+                const sym = try (try this.env.doString("(gensym)", "(embed)")).unwrap(janet.Symbol);
+                // _ = sym;
+                // todo: this seems to leak data
+                // const slice = try dvui.currentWindow().arena.dupeZ(u8, );
+                this.env.def(sym.slice, res, null);
+                // try janetWindows.append(JanetValueWindow.init(res));
+                @memset(&doit_buffer, 0);
             } else |err| {
                 std.log.err("when running janet code: {}", .{err});
             }
         }
     }
 };
-
-var text_buf: [100]u8 = .{0} ** 100;
-fn ui_logic() !void {
-    const a = dvui.currentWindow().arena;
-    _ = a;
-
-    for (janetWindows.items, 0..) |*win, i| {
-        try win.draw(i);
-    }
-
-    // {
-    //     var float = try dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{ .w = 400, .h = 400 } });
-    //     defer float.deinit();
-
-    //     try dvui.windowHeader("Floating Window", "", null);
-
-    //     var scroll = try dvui.scrollArea(@src(), .{}, .{ .expand = .both, .color_style = .window });
-    //     defer scroll.deinit();
-    //     {
-    //         var tl = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font_style = .title_4 });
-    //         defer tl.deinit();
-    //         const lorem = "This example shows how to use dvui for floating windows on top of an existing application.";
-    //         try tl.addText(lorem, .{});
-    //     }
-    //     {
-    //         var tl2 = try dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-    //         defer tl2.deinit();
-    //         try tl2.addText("The dvui is painting only floating windows and dialogs.", .{});
-    //         try tl2.addText("\n\n", .{});
-    //         try tl2.addText("Framerate is managed by the application (in this demo capped at vsync).", .{});
-    //         try tl2.addText("\n\n", .{});
-    //         try tl2.addText("Cursor is only being set by dvui for floating windows.", .{});
-    //     }
-
-    //     if (dvui.Examples.show_demo_window) {
-    //         if (try dvui.button(@src(), "Hide Demo Window", .{})) {
-    //             dvui.Examples.show_demo_window = false;
-    //         }
-    //     } else {
-    //         if (try dvui.button(@src(), "Show Demo Window", .{})) {
-    //             dvui.Examples.show_demo_window = true;
-    //         }
-    //     }
-    // }
-    // // look at demo() for examples of dvui widgets, shows in a floating window
-    // try dvui.Examples.demo();
-}
-
-fn app_init() !void {
-    if (c.SDL_Init(c.SDL_INIT_VIDEO) < 0) {
-        std.debug.print("Couldn't initialize SDL: {s}\n", .{c.SDL_GetError()});
-        return error.BackendError;
-    }
-
-    window = c.SDL_CreateWindow("DVUI Ontop Example", c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, @as(c_int, @intCast(640)), @as(c_int, @intCast(480)), c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE) orelse {
-        std.debug.print("Failed to open window: {s}\n", .{c.SDL_GetError()});
-        return error.BackendError;
-    };
-
-    _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
-
-    renderer = c.SDL_CreateRenderer(window, -1, c.SDL_RENDERER_PRESENTVSYNC) orelse {
-        std.debug.print("Failed to create renderer: {s}\n", .{c.SDL_GetError()});
-        return error.BackendError;
-    };
-
-    _ = c.SDL_SetRenderDrawBlendMode(renderer, c.SDL_BLENDMODE_BLEND);
-}
