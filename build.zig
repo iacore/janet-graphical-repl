@@ -16,6 +16,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const dep_dvui = b.dependency("dvui", .{ .target = target, .optimize = optimize });
+    const dep_janet = b.dependency("jzignet", .{ .target = target, .optimize = optimize });
 
     const exe = b.addExecutable(.{
         .name = "janet-dvui",
@@ -30,11 +31,14 @@ pub fn build(b: *std.Build) void {
     exe.addModule("SDLBackend", dep_dvui.module("SDLBackend"));
     exe.addModule("dvui", dep_dvui.module("dvui"));
 
-    const freetype_dep = b.dependency("dvui.freetype", .{
+    const dep_freetype = b.dependency("dvui.freetype", .{
         .target = target,
         .optimize = optimize,
     });
-    exe.linkLibrary(freetype_dep.artifact("freetype"));
+    exe.linkLibrary(dep_freetype.artifact("freetype"));
+
+    exe.addModule("janet", dep_janet.module("jzignet"));
+    exe.linkLibrary(dep_janet.artifact("jzignet"));
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default

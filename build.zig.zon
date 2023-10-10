@@ -6,5 +6,9 @@
             .url = "https://github.com/david-vanderson/dvui/archive/358cd1f.tar.gz",
             .hash = "122067dc5d30330411bfddac9ce31d8ab4222f421626e653034691929d63ea1412ad",
         },
+        .jzignet = .{
+            .url = "https://github.com/iacore/jzignet/archive/0e72ac8.tar.gz",
+            .hash = "12202fb317a3c5ffd7ef16b6c886cd92c4b82e9c874bae96d2361f3908cea9f27a5a",
+        },
     },
 }

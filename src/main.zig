@@ -1,5 +1,6 @@
 const std = @import("std");
 const dvui = @import("dvui");
+const janet = @import("janet");
 const SDLBackend = @import("SDLBackend");
 
 var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
@@ -12,10 +13,19 @@ pub const c = @cImport({
 var window: *c.SDL_Window = undefined;
 var renderer: *c.SDL_Renderer = undefined;
 
+var env: *janet.Environment = undefined;
+var ex: janet.Janet = undefined;
 /// This example shows how to use dvui for floating windows on top of an existing application
 /// - dvui renders only floating windows
 /// - framerate is managed by application, not dvui
 pub fn main() !void {
+    try janet.init();
+    const core_env = janet.Environment.coreEnv(null);
+    var env_ = janet.Table.initDynamic(0);
+    env_.proto = core_env.toTable();
+    env = env_.toEnvironment();
+    ex = try env.doString("[1 2 3]", "(embed)");
+
     // app_init is a stand-in for what your application is already doing to set things up
     try app_init();
 
@@ -84,6 +94,8 @@ pub fn main() !void {
 }
 
 fn dvui_stuff() !void {
+    const a = dvui.currentWindow().arena;
+
     var float = try dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{ .w = 400, .h = 400 } });
     defer float.deinit();
 
@@ -103,6 +115,11 @@ fn dvui_stuff() !void {
     try tl2.addText("Framerate is managed by the application (in this demo capped at vsync).", .{});
     try tl2.addText("\n\n", .{});
     try tl2.addText("Cursor is only being set by dvui for floating windows.", .{});
+
+    for ((try ex.indexedView()).slice()) |elm| {
+        try tl2.addText(try std.fmt.allocPrint(a, "- {}\n", .{try elm.unwrap(f64)}), .{});
+    }
+
     tl2.deinit();
 
     if (dvui.Examples.show_demo_window) {
