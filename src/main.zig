@@ -136,7 +136,7 @@ pub const ObjectManager = struct {
         // try dvui.Examples.demo();
     }
 
-    pub fn drawValue(this: *@This(), key: [:0]const u8, value: janet.Janet) !void {
+    pub fn drawValue(this: *@This(), key: []const u8, value: janet.Janet) !void {
         var open = true;
         var float = try dvui.floatingWindow(@src(), .{ .open_flag = &open }, .{ .min_size_content = .{ .w = 150, .h = 100 }, .expand = .both, .id_extra = @intFromPtr(key.ptr) });
         defer float.deinit();
@@ -165,10 +165,8 @@ pub const ObjectManager = struct {
             text[text.len - 1] = 0;
             if (this.env.doString(text, "(embed repl)")) |res| {
                 const sym = try (try this.env.doString("(gensym)", "(embed)")).unwrap(janet.Symbol);
-                // _ = sym;
-                // todo: this seems to leak data
-                // const slice = try dvui.currentWindow().arena.dupeZ(u8, );
-                this.env.def(sym.slice, res, null);
+                const slice = try dvui.currentWindow().arena.dupeZ(u8, sym.slice);
+                this.env.def(slice, res, null);
                 // try janetWindows.append(JanetValueWindow.init(res));
                 @memset(&doit_buffer, 0);
             } else |err| {
