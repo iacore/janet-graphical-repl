@@ -1,0 +1,10 @@
+.{
+    .name = "janet-dvui-test",
+    .version = "0.0.1",
+    .dependencies = .{
+        .dvui = .{
+            .url = "https://github.com/david-vanderson/dvui/archive/358cd1f.tar.gz",
+            .hash = "122067dc5d30330411bfddac9ce31d8ab4222f421626e653034691929d63ea1412ad",
+        },
+    },
+}
