@@ -174,33 +174,30 @@ pub const ObjectManager = struct {
 
         {
             const entry = try dvui.textEntry(@src(), .{ .text = &doit_buffer, .scroll_vertical_bar = .hide, .scroll_horizontal_bar = .hide }, .{ .expand = .horizontal });
-            // try entry.install();
-            defer entry.deinit();
-
+            entry.deinit();
             const text = doit_buffer[0..entry.len];
             if (text.len > 0 and text[text.len - 1] == '\n') {
                 text[text.len - 1] = 0;
-                try this.tryDo(text[0 .. text.len - 1], &doit_buffer);
+                try this.tryDo(text[0 .. text.len - 1], &doit_buffer, .getit);
             }
-        }
-        {
             const box = try dvui.box(@src(), .horizontal, .{ .gravity_x = 1 });
             defer box.deinit();
             if (try dvui.button(@src(), "Do It", .{})) {
-                // todo
+                try this.tryDo(text, &doit_buffer, .doit);
             }
             if (try dvui.button(@src(), "Get It", .{})) {
-                // todo
+                try this.tryDo(text, &doit_buffer, .getit);
             }
         }
     }
 
-    fn tryDo(this: *@This(), text: []const u8, buffer: []u8) !void {
+    fn tryDo(this: *@This(), text: []const u8, buffer: []u8, action: enum { doit, getit }) !void {
         if (this.env.doString(text, "(embed repl)")) |res| {
-            const sym = try (try this.env.doString("(gensym)", "(embed)")).unwrap(janet.Symbol);
-            const slice = try dvui.currentWindow().arena.dupeZ(u8, sym.slice);
-            this.env.def(slice, res, null);
-            // try janetWindows.append(JanetValueWindow.init(res));
+            if (action == .getit) {
+                const sym = janet.Symbol.gen();
+                const slice = try dvui.currentWindow().arena.dupeZ(u8, sym.slice);
+                this.env.def(slice, res, null);
+            }
             @memset(buffer, 0);
         } else |err| {
             std.log.err("when running janet code: {}", .{err});
