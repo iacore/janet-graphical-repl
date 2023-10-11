@@ -54,7 +54,7 @@ pub fn main() !void {
     defer win.deinit();
 
     main_loop: while (true) {
-        try win.begin(.{});
+        try win.begin(std.time.nanoTimestamp());
 
         // send events to dvui if they belong to floating windows
         var event: SDLBackend.c.SDL_Event = undefined;
@@ -160,7 +160,8 @@ pub const ObjectManager = struct {
         defer dvui.dataSet(null, float.wd.id, key, doit_buffer);
 
         {
-            const entry = try dvui.textEntry(@src(), .{ .text = &doit_buffer }, .{ .expand = .horizontal });
+            const entry = try dvui.textEntry(@src(), .{ .text = &doit_buffer, .scroll_vertical = false, .scroll_horizontal_bar = .hide }, .{ .expand = .horizontal });
+            // try entry.install();
             defer entry.deinit();
 
             const text = doit_buffer[0..entry.len];
