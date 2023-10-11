@@ -14,10 +14,12 @@ To run the program, run `zig build run` with Zig 0.11.0.
 
 Knowledge of Janet is required.
 
-- Write code in the text field
-- "Do It" executes the code in text field
-- "Get It" executes the code and give the result a name
-- Pressing Enter at the end of text field = "Get It"
+- Write code in the text field.
+- "Do It" executes the code in text field.
+- "Get It" executes the code and give the result a name.
+- Pressing Enter at the end of text field = "Get It".
+- Each top-level definition (`def`, `var`) that starts with `_` will be a window. `_` is a special variable that represents current object/window (when writing code in the text field).
+- The window shows object representation live.
 
 ## To do
 
