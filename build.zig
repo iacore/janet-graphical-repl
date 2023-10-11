@@ -38,6 +38,7 @@ pub fn build(b: *std.Build) void {
     exe.linkLibrary(dep_freetype.artifact("freetype"));
 
     exe.addModule("janet", dep_janet.module("jzignet"));
+    exe.addModule("cjanet", dep_janet.module("cjanet"));
     exe.linkLibrary(dep_janet.artifact("jzignet"));
 
     // This declares intent for the executable to be installed into the

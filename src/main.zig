@@ -118,6 +118,7 @@ pub const ObjectManager = struct {
 
     pub fn draw(this: *@This()) !void {
         const a = dvui.currentWindow().arena;
+        _ = a;
 
         {
             var float = try dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{} });
@@ -131,14 +132,16 @@ pub const ObjectManager = struct {
         }
         try dvui.Examples.demo();
 
-        const lookup = this.env.envLookup().toTable().wrap();
-        const kvs = try lookup.dictionaryView();
-        const slice = try a.dupe(janet.KV, kvs.slice());
-        for (slice) |kv| {
-            if (kv.key.unwrap(janet.Symbol)) |key_obj| {
-                const key = key_obj.slice;
+        const kvs = try this.env.toTable().wrap().dictionaryView();
+        // const slice = try a.dupe(janet.KV, kvs.slice());
+        for (kvs.slice()) |kv| {
+            if (kv.key.unwrap(janet.Symbol)) |key_sym| {
+                const key = key_sym.slice;
+                var value: janet.Janet = undefined;
+                _ = @import("cjanet").janet_resolve(this.env.toC(), key_sym.toC(), @ptrCast(&value));
                 if (key.len > 1 and key[0] == '_') {
-                    try this.drawValue(key, kv.value);
+                    // std.log.debug("k = {s} v = {}", .{ key, value });
+                    try this.drawValue(key, value);
                 }
             } else |_| {}
         }
@@ -192,13 +195,19 @@ pub const ObjectManager = struct {
     }
 
     fn tryDo(this: *@This(), text: []const u8, buffer: []u8, action: enum { doit, getit }) !void {
+        _ = buffer;
         if (this.env.doString(text, "(embed repl)")) |res| {
+            // @breakpoint();
+            std.log.info("exec result = {}", .{res});
             if (action == .getit) {
+                // janet.gcRoot(res);
+                // defer _ = janet.gcUnroot(res);
                 const sym = janet.Symbol.gen();
-                const slice = try dvui.currentWindow().arena.dupeZ(u8, sym.slice);
+                const slice = try gpa.dupeZ(u8, sym.slice);
                 this.env.def(slice, res, null);
+                std.log.info("(def {s} {})", .{ slice, res });
             }
-            @memset(buffer, 0);
+            // @memset(buffer, 0);
         } else |err| {
             std.log.err("when running janet code: {}", .{err});
         }
