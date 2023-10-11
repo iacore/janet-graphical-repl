@@ -39,7 +39,10 @@ fn app_init() !void {
 /// - dvui renders only floating windows
 /// - framerate is managed by application, not dvui
 pub fn main() !void {
+    // defer _ = gpa_instance.deinit();
+
     var manager = try ObjectManager.init();
+    defer manager.deinit();
 
     // app_init is a stand-in for what your application is already doing to set things up
     try app_init();
@@ -111,9 +114,22 @@ pub const ObjectManager = struct {
         var env_ = janet.Table.initDynamic(0);
         env_.proto = core_env.toTable();
         const env = env_.toEnvironment();
+        janet.gcRoot(env_.wrap()); // this doesn't fix the problem either
+
+        // _ = try env.doString("(import spork/sh)", "embed");
+        // const res = try env.doString(
+        //     \\(sh/exec-slurp "uname")
+        // , "embed");
+        // _ = res;
+        // @breakpoint();
+
         return .{
             .env = env,
         };
+    }
+
+    pub fn deinit(this: @This()) void {
+        _ = janet.gcUnroot(this.env.toTable().wrap());
     }
 
     pub fn draw(this: *@This()) !void {

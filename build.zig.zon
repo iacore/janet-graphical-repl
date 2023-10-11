@@ -8,8 +8,8 @@
             .hash = "122053170d7d083ea21416c9462a1eb3df94e643f94c28967b3b121463c285abbc73",
         },
         .jzignet = .{
-            .url = "https://github.com/iacore/jzignet/archive/cccbbb3.tar.gz",
-            .hash = "1220ae25308b7b2a546674b44b38b929b6e9e6d7f22cc24c72262beab99737e78233",
+            .url = "https://github.com/iacore/jzignet/archive/38ee224.tar.gz",
+            .hash = "1220fc2c570f919a5207d6fa1f12dffe58ddfee4b0cc11bde20bbed56a70b0dfcaed",
         },
     },
 }
