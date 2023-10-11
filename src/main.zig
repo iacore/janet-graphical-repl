@@ -40,7 +40,6 @@ fn app_init() !void {
 /// - framerate is managed by application, not dvui
 pub fn main() !void {
     var manager = try ObjectManager.init();
-    _ = try manager.env.doString("(def _root [1 2 3])", "(embed)");
 
     // app_init is a stand-in for what your application is already doing to set things up
     try app_init();
@@ -119,20 +118,30 @@ pub const ObjectManager = struct {
 
     pub fn draw(this: *@This()) !void {
         const a = dvui.currentWindow().arena;
-        _ = a;
+
+        {
+            var float = try dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{} });
+            defer float.deinit();
+            try dvui.windowHeader("Root Window", "", null);
+
+            if (try dvui.button(@src(), "Toggle Demo Window", .{})) {
+                dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
+            }
+            try this.widgetDo(float, "");
+        }
+        try dvui.Examples.demo();
 
         const lookup = this.env.envLookup().toTable().wrap();
         const kvs = try lookup.dictionaryView();
-        for (kvs.slice()) |kv| {
+        const slice = try a.dupe(janet.KV, kvs.slice());
+        for (slice) |kv| {
             if (kv.key.unwrap(janet.Symbol)) |key_obj| {
                 const key = key_obj.slice;
                 if (key.len > 1 and key[0] == '_') {
                     try this.drawValue(key, kv.value);
                 }
-                // _ = try this.env.doString("(put (curenv) '_ nil)", "(embed)");
             } else |_| {}
         }
-        // try dvui.Examples.demo();
     }
 
     pub fn drawValue(this: *@This(), key: []const u8, value: janet.Janet) !void {
@@ -156,27 +165,45 @@ pub const ObjectManager = struct {
         try layout.addTextDone(.{});
         layout.deinit();
 
+        try this.widgetDo(float, key);
+    }
+
+    fn widgetDo(this: *@This(), float: *dvui.FloatingWindowWidget, key: []const u8) !void {
         var doit_buffer = dvui.dataGet(null, float.wd.id, key, [1024]u8) orelse .{0} ** 1024;
         defer dvui.dataSet(null, float.wd.id, key, doit_buffer);
 
         {
-            const entry = try dvui.textEntry(@src(), .{ .text = &doit_buffer, .scroll_vertical = false, .scroll_horizontal_bar = .hide }, .{ .expand = .horizontal });
+            const entry = try dvui.textEntry(@src(), .{ .text = &doit_buffer, .scroll_vertical_bar = .hide, .scroll_horizontal_bar = .hide }, .{ .expand = .horizontal });
             // try entry.install();
             defer entry.deinit();
 
             const text = doit_buffer[0..entry.len];
             if (text.len > 0 and text[text.len - 1] == '\n') {
                 text[text.len - 1] = 0;
-                if (this.env.doString(text, "(embed repl)")) |res| {
-                    const sym = try (try this.env.doString("(gensym)", "(embed)")).unwrap(janet.Symbol);
-                    const slice = try dvui.currentWindow().arena.dupeZ(u8, sym.slice);
-                    this.env.def(slice, res, null);
-                    // try janetWindows.append(JanetValueWindow.init(res));
-                    @memset(&doit_buffer, 0);
-                } else |err| {
-                    std.log.err("when running janet code: {}", .{err});
-                }
+                try this.tryDo(text[0 .. text.len - 1], &doit_buffer);
             }
+        }
+        {
+            const box = try dvui.box(@src(), .horizontal, .{ .gravity_x = 1 });
+            defer box.deinit();
+            if (try dvui.button(@src(), "Do It", .{})) {
+                // todo
+            }
+            if (try dvui.button(@src(), "Get It", .{})) {
+                // todo
+            }
+        }
+    }
+
+    fn tryDo(this: *@This(), text: []const u8, buffer: []u8) !void {
+        if (this.env.doString(text, "(embed repl)")) |res| {
+            const sym = try (try this.env.doString("(gensym)", "(embed)")).unwrap(janet.Symbol);
+            const slice = try dvui.currentWindow().arena.dupeZ(u8, sym.slice);
+            this.env.def(slice, res, null);
+            // try janetWindows.append(JanetValueWindow.init(res));
+            @memset(buffer, 0);
+        } else |err| {
+            std.log.err("when running janet code: {}", .{err});
         }
     }
 };

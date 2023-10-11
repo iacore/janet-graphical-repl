@@ -11,7 +11,7 @@ To run the program, run `zig build run` with Zig 0.11.0.
 - [x] unique `def` for each window/object (all starts with `_`)
 - [x] closable windows (delete variable on close)
 - [ ] "Do it" and "Get it"
-- [ ] unclosable root window with demo window toggle
+- [x] unclosable root window with demo window toggle
 - [ ] "copy variable name" button
 - [ ] show stdout/stderr in window somehow
 - [ ] save state
