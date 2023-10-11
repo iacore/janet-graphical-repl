@@ -132,7 +132,6 @@ pub const ObjectManager = struct {
                 // _ = try this.env.doString("(put (curenv) '_ nil)", "(embed)");
             } else |_| {}
         }
-
         // try dvui.Examples.demo();
     }
 
