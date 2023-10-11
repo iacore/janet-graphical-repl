@@ -1,8 +1,11 @@
 # General-Purpose Graphical [Janet](https://janet-lang.org/) REPL
 
-Still experimental. I'll try to make this a better REPL than the terminal one (`janet`).
+Janet REPL in the image of Self and gtoolkit.
 
+![screenshot of the application](screenshot.png)  
 [Demo Video](https://www.1a-insec.net/blog/20-janet-graphical-repl/)
+
+I'll try to make this a much better REPL than the terminal one (`janet`).
 
 This program is developed together with [dvui](https://github.com/david-vanderson/dvui).
 
