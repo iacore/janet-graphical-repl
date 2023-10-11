@@ -11,7 +11,7 @@ This program is developed together with [dvui](https://github.com/david-vanderso
 
 ## Building
 
-To run the program, run `zig build run` with Zig 0.11.0.
+To run the program, run `zig build run` with Zig 0.11.0. (If you use wayland, set environment variable `SDL_VIDEODRIVER=wayland`.)
 
 ## How it works
 
@@ -30,9 +30,10 @@ Knowledge of Janet is required.
 - [x] closable windows (delete variable on close)
 - [x] "Do it" and "Get it"
 - [x] unclosable root window with demo window toggle
+- [ ] persist env to file
+- [ ] open Janet REPL on stdin
 - [ ] Define view protocol (like `{_ :dview}`)
 - [ ] different view tabs (like in gtoolkit)
 - [ ] "broadcast variable name" button (via subscription system in Janet)
-- [ ] persist env to file
 <!-- - [ ] show stdout/stderr in window somehow -->
 - [ ] clean up
