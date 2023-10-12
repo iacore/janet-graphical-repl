@@ -24,6 +24,10 @@ Knowledge of Janet is required.
 - Each top-level definition (`def`, `var`) that starts with `_` will be a window. `_` is a special variable that represents current object/window (when writing code in the text field).
 - The window shows object representation live.
 
+## Caveat
+
+- [ ] cfunction cannot be persisted. imported library might have cfunction.
+
 ## To do
 
 - [x] unique `def` for each window/object (all starts with `_`)
