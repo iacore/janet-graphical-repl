@@ -3,9 +3,8 @@
     .version = "0.0.1",
     .dependencies = .{
         .dvui = .{
-            // .url = "https://github.com/iacore/david-gui/archive/1aeebdd.tar.gz",
-            .url = "https://github.com/david-vanderson/dvui/archive/1aeebdd.tar.gz",
-            .hash = "122053170d7d083ea21416c9462a1eb3df94e643f94c28967b3b121463c285abbc73",
+            .url = "https://github.com/david-vanderson/dvui/archive/4bb4433.tar.gz",
+            .hash = "122089f2d33a7a8c6a932bb55dccec44a3bea03cf3cdf428dfe8053610f8af2903c6",
         },
         .jzignet = .{
             .url = "https://github.com/iacore/jzignet/archive/38ee224.tar.gz",

@@ -187,25 +187,45 @@ pub const ObjectManager = struct {
         try this.widgetDo(float, key);
     }
 
+    /// widget for Do It and Get It
     fn widgetDo(this: *@This(), float: *dvui.FloatingWindowWidget, key: []const u8) !void {
-        var doit_buffer = dvui.dataGet(null, float.wd.id, key, [1024]u8) orelse .{0} ** 1024;
-        defer dvui.dataSet(null, float.wd.id, key, doit_buffer);
+        var code_buffer = dvui.dataGet(null, float.wd.id, key, [1024]u8) orelse .{0} ** 1024;
+        defer dvui.dataSet(null, float.wd.id, key, code_buffer);
 
         {
-            const entry = try dvui.textEntry(@src(), .{ .text = &doit_buffer, .scroll_vertical_bar = .hide, .scroll_horizontal_bar = .hide }, .{ .expand = .horizontal });
-            entry.deinit();
-            const text = doit_buffer[0..entry.len];
-            if (text.len > 0 and text[text.len - 1] == '\n') {
-                text[text.len - 1] = 0;
-                try this.tryDo(text[0 .. text.len - 1], &doit_buffer, .getit);
+            var te = dvui.TextEntryWidget.init(@src(), .{ .text = &code_buffer }, .{ .expand = .horizontal });
+            try te.install();
+
+            const emo = te.eventMatchOptions();
+            for (dvui.events()) |*e| {
+                // for global shortcuts, don't call eventMatch and do it early in the frame
+                if (!dvui.eventMatch(e, emo))
+                    continue;
+
+                if (e.evt == .key and e.evt.key.code == .enter and e.evt.key.action == .down) {
+                    e.handled = true; // prevent normal processing
+
+                    const text = code_buffer[0..te.len];
+                    try this.tryDo(text, &code_buffer, .getit);
+                }
+
+                if (!e.handled) {
+                    te.processEvent(e, false);
+                }
             }
+
+            try te.draw();
+            te.deinit();
+
+            const text = code_buffer[0..te.len];
+
             const box = try dvui.box(@src(), .horizontal, .{ .gravity_x = 1 });
             defer box.deinit();
             if (try dvui.button(@src(), "Do It", .{})) {
-                try this.tryDo(text, &doit_buffer, .doit);
+                try this.tryDo(text, &code_buffer, .doit);
             }
             if (try dvui.button(@src(), "Get It", .{})) {
-                try this.tryDo(text, &doit_buffer, .getit);
+                try this.tryDo(text, &code_buffer, .getit);
             }
         }
     }
