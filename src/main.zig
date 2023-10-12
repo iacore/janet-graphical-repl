@@ -40,8 +40,14 @@ fn app_init() !void {
 /// - framerate is managed by application, not dvui
 pub fn main() !void {
     // defer _ = gpa_instance.deinit();
+    if (std.os.argv.len <= 1) {
+        const stderr = std.io.getStdErr().writer();
+        try stderr.print("Usage: {s} IMAGE_FILE\n", .{std.os.argv[0]});
+        try stderr.print("IMAGE_FILE does not need to exist at first\n", .{std.os.argv[0]});
+        std.os.exit(1);
+    }
 
-    var manager = try ObjectManager.init();
+    var manager = try ObjectManager.init(gpa, std.mem.span(std.os.argv[1]));
     defer manager.deinit();
 
     // app_init is a stand-in for what your application is already doing to set things up
@@ -107,25 +113,45 @@ pub fn main() !void {
 
 pub const ObjectManager = struct {
     env: *janet.Environment,
+    filename: []const u8,
 
-    pub fn init() !@This() {
+    pub fn init(alloc: std.mem.Allocator, filename: []const u8) !@This() {
         try janet.init();
-        const core_env = janet.Environment.coreEnv(null);
-        var env_ = janet.Table.initDynamic(0);
-        env_.proto = core_env.toTable();
-        const env = env_.toEnvironment();
-        janet.gcRoot(env_.wrap()); // this doesn't fix the problem either
+        if (std.fs.cwd().openFile(filename, .{})) |file| {
+            defer file.close();
+            const content = try file.readToEndAlloc(alloc, std.math.maxInt(usize));
+            defer alloc.free(content);
+            const core_env = janet.Environment.coreEnv(null);
+            core_env.def("_", janet.string(content), null);
+            const env_obj = try core_env.doString("(load-image _)", "(embed)");
+            const env = (try env_obj.unwrap(*janet.Table)).toEnvironment();
+            return .{
+                .env = env,
+                .filename = filename,
+            };
+        } else |err| {
+            if (err != error.FileNotFound) {
+                return err;
+            }
+            const core_env = janet.Environment.coreEnv(null);
+            var env_ = janet.Table.initDynamic(0);
+            env_.proto = core_env.toTable();
+            const env = env_.toEnvironment();
+            janet.gcRoot(env_.wrap());
+            return .{
+                .env = env,
+                .filename = filename,
+            };
+        }
+    }
 
-        // _ = try env.doString("(import spork/sh)", "embed");
-        // const res = try env.doString(
-        //     \\(sh/exec-slurp "uname")
-        // , "embed");
-        // _ = res;
-        // @breakpoint();
-
-        return .{
-            .env = env,
-        };
+    pub fn persist(this: @This()) !void {
+        const img_obj = try this.env.doString("(make-image (curenv))", "(main)");
+        const img_s = try img_obj.bytesView();
+        const file = try std.fs.cwd().createFile(this.filename, .{});
+        defer file.close();
+        try file.writeAll(img_s.slice());
+        try file.sync();
     }
 
     pub fn deinit(this: @This()) void {
@@ -136,11 +162,14 @@ pub const ObjectManager = struct {
         const a = dvui.currentWindow().arena;
         _ = a;
 
-        {
+        { // root window
             var float = try dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{} });
             defer float.deinit();
             try dvui.windowHeader("Root Window", "", null);
 
+            if (try dvui.button(@src(), "Persist", .{})) {
+                try this.persist();
+            }
             if (try dvui.button(@src(), "Toggle Demo Window", .{})) {
                 dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
             }
