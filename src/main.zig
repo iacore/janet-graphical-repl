@@ -43,7 +43,7 @@ pub fn main() !void {
     if (std.os.argv.len <= 1) {
         const stderr = std.io.getStdErr().writer();
         try stderr.print("Usage: {s} IMAGE_FILE\n", .{std.os.argv[0]});
-        try stderr.print("IMAGE_FILE does not need to exist at first\n", .{std.os.argv[0]});
+        try stderr.print("IMAGE_FILE does not need to exist at first\n", .{});
         std.os.exit(1);
     }
 
@@ -218,11 +218,16 @@ pub const ObjectManager = struct {
 
     /// widget for Do It and Get It
     fn widgetDo(this: *@This(), float: *dvui.FloatingWindowWidget, key: []const u8) !void {
-        var code_buffer = dvui.dataGet(null, float.wd.id, key, [1024]u8) orelse .{0} ** 1024;
-        defer dvui.dataSet(null, float.wd.id, key, code_buffer);
+        var code_buffer: []u8 =
+            if (dvui.dataGet(null, float.wd.id, key, []u8)) |data|
+            data
+        else data: {
+            dvui.dataSet(null, float.wd.id, key, .{0} ** 1024);
+            break :data dvui.dataGet(null, float.wd.id, key, []u8).?;
+        };
 
         {
-            var te = dvui.TextEntryWidget.init(@src(), .{ .text = &code_buffer }, .{ .expand = .horizontal });
+            var te = dvui.TextEntryWidget.init(@src(), .{ .text = code_buffer }, .{ .expand = .horizontal });
             try te.install();
 
             const emo = te.eventMatchOptions();
@@ -235,7 +240,7 @@ pub const ObjectManager = struct {
                     e.handled = true; // prevent normal processing
 
                     const text = code_buffer[0..te.len];
-                    try this.tryDo(text, &code_buffer, .getit);
+                    try this.tryDo(text, code_buffer, .getit);
                 }
 
                 if (!e.handled) {
@@ -251,10 +256,10 @@ pub const ObjectManager = struct {
             const box = try dvui.box(@src(), .horizontal, .{ .gravity_x = 1 });
             defer box.deinit();
             if (try dvui.button(@src(), "Do It", .{})) {
-                try this.tryDo(text, &code_buffer, .doit);
+                try this.tryDo(text, code_buffer, .doit);
             }
             if (try dvui.button(@src(), "Get It", .{})) {
-                try this.tryDo(text, &code_buffer, .getit);
+                try this.tryDo(text, code_buffer, .getit);
             }
         }
     }
@@ -265,8 +270,6 @@ pub const ObjectManager = struct {
             // @breakpoint();
             std.log.info("exec result = {}", .{res});
             if (action == .getit) {
-                // janet.gcRoot(res);
-                // defer _ = janet.gcUnroot(res);
                 const sym = janet.Symbol.gen();
                 const slice = try gpa.dupeZ(u8, sym.slice);
                 this.env.def(slice, res, null);
