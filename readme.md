@@ -35,6 +35,7 @@ Knowledge of Janet is required.
 - [x] "Do it" and "Get it"
 - [x] unclosable root window with demo window toggle
 - [x] persist env to file
+- [ ] support Python and IPython display protocol
 - [ ] open Janet REPL on stdin
 - [ ] Define view protocol (like `{_ :dview}`)
 - [ ] different view tabs (like in gtoolkit)
