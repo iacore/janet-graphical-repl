@@ -125,6 +125,7 @@ pub const ObjectManager = struct {
             core_env.def("_", janet.string(content), null);
             const env_obj = try core_env.doString("(load-image _)", "(embed)");
             const env = (try env_obj.unwrap(*janet.Table)).toEnvironment();
+            std.log.info("Loaded image from file: {s}", .{filename});
             return .{
                 .env = env,
                 .filename = filename,
@@ -138,6 +139,7 @@ pub const ObjectManager = struct {
             env_.proto = core_env.toTable();
             const env = env_.toEnvironment();
             janet.gcRoot(env_.wrap());
+            std.log.info("Failed to find image file. Creating one in memory.", .{});
             return .{
                 .env = env,
                 .filename = filename,
