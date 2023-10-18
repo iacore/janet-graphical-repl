@@ -194,7 +194,7 @@ pub const ObjectManager = struct {
 
     pub fn drawValue(this: *@This(), key: []const u8, value: janet.Janet) !void {
         var open = true;
-        var float = try dvui.floatingWindow(@src(), .{ .open_flag = &open }, .{ .min_size_content = .{}, .id_extra = @intFromPtr(key.ptr) });
+        var float = try dvui.floatingWindow(@src(), .{ .open_flag = &open, .window_avoid = .nudge }, .{ .min_size_content = .{}, .id_extra = @intFromPtr(key.ptr) });
         defer float.deinit();
         this.env.def("_", value, null);
         const result = try this.env.doString(
@@ -219,15 +219,18 @@ pub const ObjectManager = struct {
     /// widget for Do It and Get It
     fn widgetDo(this: *@This(), float: *dvui.FloatingWindowWidget, key: []const u8) !void {
         var code_buffer: []u8 =
-            if (dvui.dataGet(null, float.wd.id, key, []u8)) |data|
+            if (dvui.dataGetSlice(null, float.wd.id, key, []u8)) |data|
             data
         else data: {
-            dvui.dataSet(null, float.wd.id, key, .{0} ** 1024);
-            break :data dvui.dataGet(null, float.wd.id, key, []u8).?;
+            dvui.dataSetSlice(null, float.wd.id, key, &([_]u8{0} ** 1024));
+            break :data dvui.dataGetSlice(null, float.wd.id, key, []u8).?;
         };
 
         {
             var te = dvui.TextEntryWidget.init(@src(), .{ .text = code_buffer }, .{ .expand = .horizontal });
+            if (dvui.firstFrame(te.data().id)) {
+                dvui.focusWidget(te.data().id, null, null);
+            }
             try te.install();
 
             const emo = te.eventMatchOptions();
@@ -248,7 +251,7 @@ pub const ObjectManager = struct {
                 }
             }
 
-            try te.draw();
+            try te.drawText();
             te.deinit();
 
             const text = code_buffer[0..te.len];
