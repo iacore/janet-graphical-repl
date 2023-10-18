@@ -43,7 +43,7 @@ pub fn main() !void {
     if (std.os.argv.len <= 1) {
         const stderr = std.io.getStdErr().writer();
         try stderr.print("Usage: {s} IMAGE_FILE\n", .{std.os.argv[0]});
-        try stderr.print("IMAGE_FILE does not need to exist at first\n", .{});
+        try stderr.print("The file IMAGE_FILE does not need to exist at first\n", .{});
         std.os.exit(1);
     }
 
@@ -152,6 +152,8 @@ pub const ObjectManager = struct {
         defer file.close();
         try file.writeAll(img_s.slice());
         try file.sync();
+
+        std.log.info("Janet image wrote to: {s}", .{this.filename});
     }
 
     pub fn deinit(this: @This()) void {
@@ -167,7 +169,7 @@ pub const ObjectManager = struct {
             defer float.deinit();
             try dvui.windowHeader("Root Window", "", null);
 
-            if (try dvui.button(@src(), "Persist", .{})) {
+            if (try dvui.button(@src(), "Save to File", .{})) {
                 try this.persist();
             }
             if (try dvui.button(@src(), "Toggle Demo Window", .{})) {
@@ -208,10 +210,22 @@ pub const ObjectManager = struct {
             return;
         }
 
-        const layout = try dvui.textLayout(@src(), .{}, .{ .expand = .vertical, .background = false, .min_size_content = .{ .w = 150 } });
-        try layout.addText(s.slice(), .{});
-        try layout.addTextDone(.{});
-        layout.deinit();
+        {
+            const layout = try dvui.textLayout(@src(), .{}, .{ .expand = .vertical, .background = false, .min_size_content = .{ .w = 150 } });
+            try layout.addText(s.slice(), .{});
+            try layout.addTextDone(.{});
+            layout.deinit();
+        }
+
+        draw_vector: {
+            const arr = value.indexedView() catch break :draw_vector;
+            if (arr.len == 2) { // is two element array
+                const slice = arr.slice();
+                const x = slice[0].unwrap(f64) catch break :draw_vector;
+                const y = slice[1].unwrap(f64) catch break :draw_vector;
+                try unitvectorWidget(@src(), @floatCast(x), @floatCast(y));
+            }
+        }
 
         try this.widgetDo(float, key);
     }
@@ -284,3 +298,35 @@ pub const ObjectManager = struct {
         }
     }
 };
+
+/// Unit vector widget
+///
+/// display unit vector as a line
+/// x and y from -1 to 1
+pub fn unitvectorWidget(src: std.builtin.SourceLocation, x: f32, y: f32) !void {
+    const Point = dvui.Point;
+    const WidgetData = dvui.WidgetData;
+
+    const options = dvui.Options{
+        .min_size_content = .{ .w = 50, .h = 50 },
+    };
+    var wd = WidgetData.init(src, .{}, options);
+    try wd.register("Spinner", null);
+    wd.minSizeSetAndRefresh();
+    wd.minSizeReportToParent();
+
+    if (wd.rect.empty()) {
+        return;
+    }
+
+    const rs = wd.contentRectScale();
+    const r = rs.r;
+
+    const center = Point{ .x = r.x + r.w / 2, .y = r.y + r.h / 2 };
+    const end = Point{ .x = r.x + r.w / 2 * (1 + x), .y = r.y + r.h / 2 * (1 + y) };
+    try dvui.pathAddPoint(center);
+    try dvui.pathAddPoint(end);
+    try dvui.pathStroke(false, 1 * rs.s, .none, options.color(.text));
+    try dvui.pathAddArc(center, 5 * rs.s, std.math.pi * 2, 0, false);
+    try dvui.pathStroke(false, 1 * rs.s, .none, options.color(.text));
+}
