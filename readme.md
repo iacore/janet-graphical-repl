@@ -35,11 +35,15 @@ Knowledge of Janet is required.
 - [x] "Do it" and "Get it"
 - [x] unclosable root window with demo window toggle
 - [x] persist env to file
-- [ ] support Python and IPython display protocol
-- [ ] open Janet REPL on stdin
+- [x] different view tabs (like in gtoolkit)
 - [ ] Define view protocol (like `{_ :dview}`)
-- [ ] different view tabs (like in gtoolkit)
-- [ ] auto persist?
 - [ ] "broadcast variable name" button (via subscription system in Janet)
+- [ ] open Janet REPL on stdin
+- [ ] auto persist?
 <!-- - [ ] show stdout/stderr in window somehow -->
 - [ ] clean up
+
+
+Wild thoughts, but probably out of scope.
+
+- [ ] support Python and IPython display protocol

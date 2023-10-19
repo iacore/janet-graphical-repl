@@ -196,6 +196,11 @@ pub const ObjectManager = struct {
         }
     }
 
+    pub const DataView = union(enum) {
+        pretty_print,
+        vector: [2]f32,
+    };
+
     pub fn drawValue(this: *@This(), key: []const u8, value: janet.Janet) !void {
         var open = true;
         var float = try dvui.floatingWindow(@src(), .{ .open_flag = &open, .window_avoid = .nudge }, .{ .min_size_content = .{}, .id_extra = @intFromPtr(key.ptr) });
@@ -212,20 +217,45 @@ pub const ObjectManager = struct {
             return;
         }
 
-        {
-            const layout = try dvui.textLayout(@src(), .{}, .{ .expand = .vertical, .background = false, .min_size_content = .{ .w = 150 } });
-            try layout.addText(s.slice(), .{});
-            try layout.addTextDone(.{});
-            layout.deinit();
-        }
-
+        var views_arr = try std.BoundedArray(DataView, @typeInfo(DataView).Union.fields.len).init(0);
+        try views_arr.append(.pretty_print);
         draw_vector: {
             const arr = value.indexedView() catch break :draw_vector;
             if (arr.len == 2) { // is two element array
                 const slice = arr.slice();
                 const x = slice[0].unwrap(f64) catch break :draw_vector;
                 const y = slice[1].unwrap(f64) catch break :draw_vector;
-                try unitvectorWidget(@src(), @floatCast(x), @floatCast(y));
+                try views_arr.append(.{ .vector = [_]f32{ @floatCast(x), @floatCast(y) } });
+            }
+        }
+
+        if (views_arr.len > 0) {
+            var selected_view_id: usize = dvui.dataGet(null, float.wd.id, "view_id", usize) orelse 0;
+            defer dvui.dataSet(null, float.wd.id, "view_id", selected_view_id);
+
+            {
+                const wd = try dvui.box(@src(), .horizontal, .{});
+                defer wd.deinit();
+                for (0.., views_arr.slice()) |i, view| {
+                    if (try dvui.button(@src(), @tagName(view), .{ .id_extra = i, .background = selected_view_id != i, .margin = dvui.Rect.all(0), .corner_radius = dvui.Rect.all(0) })) {
+                        selected_view_id = i;
+                    }
+                }
+            }
+
+            selected_view_id = @min(selected_view_id, views_arr.len - 1);
+
+            const selected_view = views_arr.slice()[selected_view_id];
+            switch (selected_view) {
+                .pretty_print => {
+                    const layout = try dvui.textLayout(@src(), .{}, .{ .expand = .vertical, .background = false, .min_size_content = .{ .w = 150 } });
+                    try layout.addText(s.slice(), .{});
+                    try layout.addTextDone(.{});
+                    layout.deinit();
+                },
+                .vector => |xy| {
+                    try unitvectorWidget(@src(), xy[0], xy[1]);
+                },
             }
         }
 
