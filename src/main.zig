@@ -297,7 +297,7 @@ pub const ObjectManager = struct {
                 }
             }
 
-            try te.drawText();
+            try te.draw();
             te.deinit();
 
             const text = code_buffer[0..te.len];
